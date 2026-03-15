@@ -1,6 +1,6 @@
 {
   "name": "@rayoung/dice",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Deterministic randomization utilities for simulations, generators, and games.",
   "type": "module",
   "main": "./dist/index.js",
@@ -27,7 +27,11 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "version:bump": "node ./scripts/bump-version.mjs",
+    "version:patch": "node ./scripts/bump-version.mjs patch",
+    "version:minor": "node ./scripts/bump-version.mjs minor",
+    "version:major": "node ./scripts/bump-version.mjs major"
   },
   "keywords": [
     "dice",
