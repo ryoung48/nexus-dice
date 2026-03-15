@@ -1,0 +1,271 @@
+# NPM + GitHub Setup Guide
+
+This file documents the full process for creating an npm package, connecting it
+to GitHub, and enabling automatic publishing from GitHub Actions with npm
+Trusted Publishing.
+
+## Goal
+
+Set up a repository so that:
+
+- the package is published to npm
+- pushes to `main` publish new versions automatically
+- GitHub Actions uses npm Trusted Publishing instead of a long-lived npm token
+
+## 1. Create the package locally
+
+Minimum recommended files:
+
+- `package.json`
+- `README.md`
+- `tsconfig.json` if using TypeScript
+- source files under `src/`
+- tests
+- `.gitignore`
+
+Important `package.json` fields:
+
+- `name`
+- `version`
+- `type`
+- `main`
+- `types`
+- `files`
+- `repository`
+- `homepage`
+- `bugs`
+- `publishConfig.access`
+
+Example package metadata:
+
+```json
+{
+  "name": "@your-scope/your-package",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist"],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YOUR_USER/YOUR_REPO.git"
+  },
+  "homepage": "https://github.com/YOUR_USER/YOUR_REPO#readme",
+  "bugs": {
+    "url": "https://github.com/YOUR_USER/YOUR_REPO/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
+```
+
+If the package is scoped and public, `publishConfig.access = "public"` matters.
+
+## 2. Choose the npm package name carefully
+
+Before wiring automation, verify the package name is one you can actually
+publish:
+
+```bash
+npm view @your-scope/your-package version
+```
+
+If npm returns `404`, that often just means the package is not published yet.
+That is fine.
+
+What matters is whether you control the scope:
+
+- if the scope is your npm user, publishing is straightforward
+- if the scope is an npm org, your npm account must have publish access
+
+If you are not sure you control the scope, use a scope you do control first.
+
+## 3. Create the GitHub repository
+
+Create the target repository on GitHub, then initialize local git:
+
+```bash
+git init -b main
+git remote add origin https://github.com/YOUR_USER/YOUR_REPO.git
+git add .
+git commit -m "Initial package setup"
+git push -u origin main
+```
+
+## 4. Add a GitHub Actions publish workflow
+
+Use a workflow like this:
+
+```yaml
+name: Publish
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Check published version
+        id: version_check
+        shell: bash
+        run: |
+          PACKAGE_NAME=$(node -p "require('./package.json').name")
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          PUBLISHED_VERSION=$(npm view "$PACKAGE_NAME" version 2>/dev/null || true)
+          echo "package_name=$PACKAGE_NAME" >> "$GITHUB_OUTPUT"
+          echo "package_version=$PACKAGE_VERSION" >> "$GITHUB_OUTPUT"
+          echo "published_version=$PUBLISHED_VERSION" >> "$GITHUB_OUTPUT"
+          if [ "$PACKAGE_VERSION" = "$PUBLISHED_VERSION" ]; then
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish to npm
+        if: steps.version_check.outputs.should_publish == 'true'
+        run: npm publish
+```
+
+## 5. Important Trusted Publishing requirement
+
+For npm Trusted Publishing, the workflow must use a recent npm version.
+
+In practice, using `node-version: 24` is the simplest fix because older Node
+images can ship npm versions that are too old for Trusted Publishing.
+
+This was the critical fix in this repo. Before switching to Node 24, GitHub
+Actions reached `npm publish` but npm returned `404` even though the trusted
+publisher had been configured.
+
+## 6. First manual publish
+
+Trusted Publishing is configured on the npm package settings page, so the
+package usually needs to exist on npm first.
+
+Do one initial manual publish from your local machine:
+
+```bash
+npm publish
+```
+
+If publishing is blocked by 2FA policy, use a granular npm token with publish
+rights and `bypass 2FA` enabled, or otherwise authenticate with a method that
+your npm account allows for publishing.
+
+Once that first publish succeeds, the package page exists on npm.
+
+## 7. Configure npm Trusted Publishing
+
+On npm:
+
+1. Open the package page
+2. Go to `Settings`
+3. Open `Trusted Publisher`
+4. Add:
+
+- Publisher: `GitHub Actions`
+- Organization or user: your GitHub owner, for example `ryoung48`
+- Repository: your repo name, for example `nexus-dice`
+- Workflow filename: the filename only, for example `publish.yml`
+- Environment name: leave blank unless your workflow uses a GitHub environment
+
+After saving, refresh the page and confirm the trusted publisher shows up as a
+saved configured entry.
+
+## 8. Common failure modes
+
+### `npm publish` in GitHub Actions returns 404
+
+Likely causes:
+
+- trusted publisher was not actually saved
+- wrong repository or workflow filename
+- package does not exist yet on npm
+- workflow is using an npm version too old for Trusted Publishing
+
+If everything looks correct but GitHub Actions still fails, upgrade the
+workflow to Node 24 first.
+
+### `npm publish` locally returns 403 with a 2FA error
+
+Example:
+
+`Two-factor authentication or granular access token with bypass 2fa enabled is required`
+
+That means your npm session can read account state but is not authorized to
+publish under your current security policy. Use a publish-capable auth method.
+
+### GitHub workflow publishes nothing
+
+If the workflow succeeds but skips publishing, check whether the package version
+in `package.json` already exists on npm.
+
+The workflow above intentionally skips `npm publish` when the version on npm
+matches the local version.
+
+## 9. Release flow after setup
+
+Once Trusted Publishing works:
+
+1. bump the version
+2. commit
+3. push to `main`
+
+Example version commands:
+
+```bash
+npm run version:patch
+npm run version:minor
+npm run version:major
+```
+
+Then:
+
+```bash
+git add package.json package-lock.json
+git commit -m "Release x.y.z"
+git push origin main
+```
+
+GitHub Actions should then:
+
+- install dependencies
+- run tests
+- build
+- compare npm version
+- publish only if the version is new
+
+## 10. Recommended security cleanup
+
+After Trusted Publishing is confirmed working, update npm package settings to:
+
+- `Require two-factor authentication and disallow tokens (recommended)`
+
+That removes the need to keep using long-lived publish tokens for automation.
