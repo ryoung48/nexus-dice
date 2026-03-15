@@ -1,6 +1,6 @@
 {
   "name": "@rayoung/dice",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "Deterministic randomization utilities for simulations, generators, and games.",
   "type": "module",
   "main": "./dist/index.js",
