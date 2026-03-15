@@ -5,6 +5,14 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ryoung48/nexus-dice.git"
+  },
+  "homepage": "https://github.com/ryoung48/nexus-dice#readme",
+  "bugs": {
+    "url": "https://github.com/ryoung48/nexus-dice/issues"
+  },
   "publishConfig": {
     "access": "public"
   },
