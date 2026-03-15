@@ -1,11 +1,11 @@
-# @nexus/dice
+# @rayoung/dice
 
 Deterministic randomization utilities for simulations, games, generators, and other seed-driven workflows.
 
 ## Install
 
 ```bash
-npm install @nexus/dice
+npm install @rayoung/dice
 ```
 
 ## Features
@@ -20,7 +20,7 @@ npm install @nexus/dice
 ## Usage
 
 ```ts
-import { DICE, Dice } from "@nexus/dice"
+import { DICE, Dice } from "@rayoung/dice"
 
 const dice = new Dice("6616826c")
 const pick = dice.weightedChoice([
